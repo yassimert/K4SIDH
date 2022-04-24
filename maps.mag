@@ -1,0 +1,279 @@
+/*
+ * 	 Author: Mert Yassı
+ * 	 Title : A 4 way SIMD Implementation of SIDH Compatible
+ * 	 			Isogeny Evaluations on Kummer Surfaces
+ *   Date  : 14.05.2019
+ *
+ */
+/* K4SIDH BACK-AND-FORTH MAPS MAGMA IMPLEMENTATION */ 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+H:=function(P);
+	T1:=P[1]+P[2]; T2:=P[3]+P[4]; T3:=P[1]-P[2]; T4:=P[3]-P[4];
+	return [T1+T2,T1-T2,T3+T4,T3-T4];
+end function;
+///////////////////////////////////////////////////////////////////////
+Invert4Constants:=function(P)
+	pi1:=P[3]*P[4]; pi2:=pi1*P[1]; pi1:=pi1*P[2]; pi3:=P[1]*P[2]; pi4:=pi3*P[3]; pi3:=pi3*P[4];
+	return [pi1,pi2,pi3,pi4];
+end function;
+///////////////////////////////////////////////////////////////////////
+KummerConstantsFromSquaredThetas:=function(P)
+	return Invert4Constants(P),Invert4Constants(H(P));
+end function;
+///////////////////////////////////////////////////////////////////////
+SquaredKummerFromSquaredThetas:=function(thetas)
+	mu1:=thetas[1]; mu2:=thetas[2]; mu3:=thetas[3]; mu4:=thetas[4];
+	K_F:=(mu1+mu2+mu3+mu4)*(mu1+mu2-mu3-mu4)*(mu1-mu2+mu3-mu4)*(mu1-mu2-mu3+mu4);
+	K_F:=K_F/(mu1*mu4-mu2*mu3)/(mu1*mu3-mu2*mu4)/(mu1*mu2-mu3*mu4);
+	K_G:=(mu1^2-mu2^2-mu3^2+mu4^2)/(mu1*mu4-mu2*mu3);
+	assert K_G eq (mu1^2-mu2^2+mu3^2-mu4^2)/(mu1*mu3-mu2*mu4);
+	K_H:=(mu1^2+mu2^2-mu3^2-mu4^2)/(mu1*mu2-mu3*mu4);
+	K_F:=4*K_F^2*mu1*mu2*mu3*mu4;
+	K1:=[K_F,K_G,K_H];
+	K2:=thetas;
+	K3,K4:=KummerConstantsFromSquaredThetas(thetas);
+	return [K1,K2,K3,K4];
+end function;
+///////////////////////////////////////////////////////////////////////
+SupersingularKummerSurfaceFromMontgomeryCurve:=function(g0,g1,la)
+	mu1:=((g0-g1)*(g0+g1)/(g0^2+g1^2))*Sqrt(la);
+	mu2:=((g0-g1)*(g0+g1)/(g0^2+g1^2))/Sqrt(la); 
+	mu3:=1; mu4:=1;
+	thetas:=[mu1,mu2,mu3,mu4];
+	return SquaredKummerFromSquaredThetas(thetas);
+end function;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+p:=2^372*3^239-1;
+Fp:=GF(p);
+Fp2<i>:=ExtensionField<Fp,x|x^2+1>;
+poly<x>:=PolynomialRing(Fp2);
+
+SupersingularAbelianSurfaceFromMontgomeryCurve:=function(p)
+ 	alpha:=i; 															//starting 2-torsion point (i,0) on E_alpha: y^2=x^3+x
+ 	E_alpha:=EllipticCurve([0,-(alpha^2+1)/alpha,0,1,0]);  				//E_alpha:=EllipticCurve(x*(x-alpha)*(x-1/alpha));
+ 	for j:=1 to 10 do
+		alpha:=2*alpha^2-1+Random([-1,1])*2*alpha*Sqrt(alpha^2-1);  	//compute isogenous alpha
+	end for;
+	E_alpha:=EllipticCurve([0,-(alpha^2+1)/alpha,0,1,0]); 				//E_alpha:=EllipticCurve(x*(x-alpha)*(x-1/alpha));
+	while jInvariant(E_alpha) in Fp do									// do not want a subfield curve
+		alpha:=2*alpha^2-1+Random([-1,1])*2*alpha*Sqrt(alpha^2-1);
+	 	E_alpha:=EllipticCurve([0,-(alpha^2+1)/alpha,0,1,0]);			//E_alpha:=EllipticCurve(x*(x-alpha)*(x-1/alpha));
+	end while;
+	beta:=Sqrt((alpha^2-1)/alpha);	gamma:=Sqrt(alpha);
+	b0:=ElementToSequence(beta)[1];	g0:=ElementToSequence(gamma)[1];
+	b1:=ElementToSequence(beta)[2];	g1:=ElementToSequence(gamma)[2];	
+	
+	la:=-((b0*g1+b1*g0)*(b0*g0+b1*g1))/(((b0*g0-b1*g1))*(b0*g1-b1*g0));
+	mu:= ((b0*g0+b1*g1)*(b0*g0-b1*g1))/(((b0*g1+b1*g0))*(b0*g1-b1*g0));
+	nu:=-(b0*g0+b1*g1)^2/(b0*g1-b1*g0)^2;
+	
+	z1:= b0/b1; z2:= g0/g1; z3:=-g0/g1; z4:=-b1/b0; z5:=-g1/g0; z6:= g1/g0;
+	a:=z2-z4; b:=-a*z1; c:=z2-z1; d:=-c*z4;	
+	cs:=[a,b,c,d,la,mu,nu];
+
+	Fp_:=BaseField(Parent(alpha));
+	_<x>:=PolynomialRing(Fp_);
+	C_alpha:=HyperellipticCurve((x-z1)*(x-z2)*(x-z3)*(x-z4)*(x-z5)*(x-z6));
+	J_alpha:=Jacobian(C_alpha);
+	return alpha, beta, cs, g0, g1, C_alpha, E_alpha, J_alpha;
+end function;
+///////////////////////////////////////////////////////////////////////
+
+repeat // make sure e has square root 
+	alpha, beta, cs, g0, g1, C_alpha, E_alpha, J_alpha:=SupersingularAbelianSurfaceFromMontgomeryCurve(p);
+	a:=cs[1]; b:=cs[2]; c:=cs[3]; d:=cs[4]; la:=cs[5]; mu:=cs[6]; nu:=cs[7]; 
+	e2:=a*c*(a-c)*(a-nu*c)*(a-mu*c)*(a-la*c);
+until IsSquare(e2);
+e:=Sqrt(e2);
+r1:=(alpha-1/alpha)^(p-1); r2:=alpha^(p-1); r3:=1/alpha^(p-1);
+betahat:=Sqrt(r3-r2);
+w:=Sqrt((r2-1)^2*(1-r1)*r3);
+Etil_alpha:=EllipticCurve((x-Fp2!r1)*(x-Fp2!r2)*(x-Fp2!r3));
+Ctil_alpha:=HyperellipticCurve((x^2-r1)*(x^2-r2)*(x^2-r3));
+
+MonToKum:=function()
+	P1:=Random(E_alpha);
+	
+	// E_ALPHA -> Etil_ALPHA (PSI) //
+	xp:=P1[1]; yp:=P1[2];
+	P2:=Etil_alpha![(betahat/beta)^2*xp+r1,(betahat/beta)^3*yp];
+
+	// Etil_ALPHA -> J_ALPHA (RHO) //
+	xt:=P2[1]; yt:=P2[2];
+	u1:=2*i*(xt+1)/(xt-1); 				 u0:=-1;
+	v1:=-4*i*yt*(xt+3)/(w*(xt-1)^2);	 v0:=4*yt/(w*(xt-1));
+	P3:=BaseChange(J_alpha,Fp2)![x^2+u1*x+u0,v1*x+v0];
+
+	// TRACEMAP(J_ALPHA) //
+	sigP:=Frobenius(P3,Fp);
+	P4:=J_alpha!(P3+sigP);
+
+	// J_ALPHA -> J_ROSENHAIN //
+	u0:=Coefficients(P4[1])[1]; u1:=Coefficients(P4[1])[2];
+	v0:=Coefficients(P4[2])[1];	v1:=Coefficients(P4[2])[2];
+
+	l1:=c^2*u0-c*d*u1+d^2; l2:=a*d-b*c;
+	u1d:=(1/l1)*((a*d+b*c)*u1-2*a*c*u0-2*b*d);
+	u0d:=(1/l1)*(a^2*u0-a*b*u1+b^2);
+	v1d:=e*(1/(l1^2*l2))*(c^2*(c*u1-3*d)*(u0*v1-u1*v0)+c*v0*(c^2*u0-3*d^2)+d^3*v1);
+	v0d:=-e*(1/(l1^2*l2))*(a*c^2*(u0*u1*v1-u1^2*v0+u0*v0)-c*(2*a*d+b*c)*(u0*v1-u1*v0)-d*(a*d+2*b*c)*v0+b*d^2*v1);
+
+	poly<_x>:=PolynomialRing(Fp);
+	C_ros:=HyperellipticCurve(_x*(_x-1)*(_x-la)*(_x-mu)*(_x-nu));	
+	J_ros:=Jacobian(C_ros);
+	P5:=J_ros![_x^2+u1d*_x+u0d,v1d*_x+v0d];
+
+	// J_ROSENHAIN -> KUMMER //
+	K:=SupersingularKummerSurfaceFromMontgomeryCurve(g0,g1,la);
+	q:=Coefficients(P5[1])[2]; r:=Coefficients(P5[1])[1];
+	s:=Coefficients(P5[2])[2]; t:=Coefficients(P5[2])[1];		
+	X:=K[2][1]*(r*(mu-r)*(la+q+nu)-t^2);
+	Y:=K[2][2]*(r*(nu*la-r)*(1+q+mu)-t^2);
+	Z:=K[2][3]*(r*(nu-r)*(la+q+mu)-t^2);
+	T:=K[2][4]*(r*(mu*la-r)*(1+q+nu)-t^2);
+	P6:=[X,Y,Z,T];			
+	
+	return P1,P5,P6,K,cs,J_ros,C_ros;
+end function;
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+// v_1(0)^2 -> th[1]
+// v_{14}(z)^2 -> T14
+
+KtoJRos:=function(Rpt,P,mus,cs,mssum,mv52,mv72,mt)
+	a:=mus[1]; b:=mus[2]; c:=mus[3]; d:=mus[4];
+	la:=cs[5]; mu:=cs[6]; nu:=cs[7];
+	
+	ssum:=Sqrt((a^2-b^2-c^2+d^2)+2*(a*d-b*c));	//two choices
+	if mssum eq 0 then ssum:=-ssum; end if;
+	
+	pprod:=(a*d-b*c);
+	v52:=Roots(x^2-ssum*x+pprod)[1][1];	  		//two choices
+	if mv52 eq 0 then v52:=Roots(x^2-ssum*x+pprod)[2][1]; end if;
+	
+	v62:=ssum-v52;
+	v72:=Sqrt(c^2-d^2+v52^2); 					//two choices
+	if mv72 eq 0 then v72:=-v72; end if;
+	
+	v82:=(a*v52-d*v62)/v72;
+	v92:=(a*c-b*d)/v72;
+	v102:=(b*v52-c*v62)/v72;
+	thetas:=[a,b,c,d,v52,v62,v72,v82,v92,v102];
+	th:=thetas;
+
+	X:=P[1]; Y:=P[2]; Z:=P[3]; T:=P[4]; 
+
+	A:=(a+b+c+d); B:=(a+b-c-d); C:=(a-b+c-d); D:=(a-b-c+d);
+	E:=A*B*C*D/(a*d-b*c)/(a*c-b*d)/(a*b-c*d);
+	F:=(a^2-b^2-c^2+d^2)/(a*d-b*c); 
+	G:=(a^2-b^2+c^2-d^2)/(a*c-b*d); 
+	H:=(a^2+b^2-c^2-d^2)/(a*b-c*d); 
+	
+  	T7 :=  ( -th[5]*th[8]*X  + th[5]*th[10]*Y - th[6]*th[10]*Z + th[6]*th[8]*T  ) / (th[6]^2-th[5]^2);
+  	T9 :=  (  th[6]*th[10]*X - th[6]*th[8]*Y  + th[5]*th[8]*Z  - th[5]*th[10]*T ) / (th[8]^2-th[10]^2);
+  	T11 := (  th[6]*th[8]*X  - th[6]*th[10]*Y + th[5]*th[10]*Z - th[5]*th[8]*T  ) / (th[6]^2-th[5]^2);
+  	T12 := ( -th[5]*th[10]*X + th[5]*th[8]*Y  - th[6]*th[8]*Z  + th[6]*th[10]*T ) / (th[8]^2-th[10]^2);
+  	T13 := ( -th[8]*th[9]*X  + th[9]*th[10]*Y + th[7]*th[8]*Z  - th[7]*th[10]*T ) / (th[7]^2-th[9]^2);
+  	T14 := ( -th[5]*th[9]*X  - th[6]*th[7]*Y  + th[5]*th[7]*Z  + th[6]*th[9]*T  ) / (th[7]^2-th[9]^2);
+  	T16 := ( -th[6]*th[7]*X  - th[5]*th[9]*Y  + th[6]*th[9]*Z  + th[5]*th[7]*T )  / (th[7]^2-th[9]^2);
+
+	r:=la*th[8]*T14/(th[10]*T16);
+
+	q:=(la-1)*th[5]*T13/(th[10]*T16)-r-1;
+
+	t2:=-(T12*T7*th[2]*th[3]*th[9]^2+T11*T9*th[1]*th[4]*th[7]^2+2*th[1]*th[2]*th[3]*th[4]*(X*Z+Y*T)+(X^2+Y^2+Z^2+T^2\
+	      -F*(X*T+Y*Z)-G*(X*Z+Y*T)-H*(X*Y+Z*T))*(th[1]*th[3]+th[2]*th[4])/E)*th[8]*th[3]^2*th[1]^2*T14/(T16^3*th[2]^\
+	      3*th[4]^3*th[10]^3);
+
+	_,t:=IsSquare(t2); //Choice here... 
+
+	if mt eq 0 then t:=-t; end if;
+
+	//r:u0 q:u1 s:v1 t:v0
+
+	s:=(1/2)*(r^3-r^2*(q^2+q*(1+la+mu+nu)+la+mu+nu+la*mu+nu*la+mu*nu)+r*la*mu*nu+q*t^2)/(t*r);
+
+	if Rpt[1] eq x^2+q*x+r and Rpt[2] eq s*x+t then
+		return [x^2+q*x+r,s*x+t],1;
+	else 
+		return [x^2+q*x+r,s*x+t],0;
+	end if;
+end function;
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+KumToMon:=function(Rpt,P,K,cs,J_ros,C_ros)
+	// KUMMER -> J_ROSENHAIN //	
+	mu1:=K[2][1]; mu2:=K[2][2];	mu3:=K[2][3]; mu4:=K[2][4];
+	mus:=[mu1,mu2,mu3,mu4];
+	la:=cs[5]; mu:=cs[6]; nu:=cs[7];
+	
+	PT,ret:=KtoJRos(Rpt,P,mus,cs,1,0,1,1); 				// +-++
+	if ret ne 1 then 
+		PT,ret:=KtoJRos(Rpt,P,mus,cs,1,0,1,0);			// +-+-
+		if ret ne 1 then 	
+ 			PT,ret:=KtoJRos(Rpt,P,mus,cs,1,1,1,1);		// ++++
+			if ret ne 1 then 
+				PT,ret:=KtoJRos(Rpt,P,mus,cs,1,1,1,0);	// +++-
+			end if;
+		end if;
+	end if;
+		
+	P1:=J_ros![PT[1],PT[2]];
+	
+	// J_ROSENHAIN -> J_ALPHA //
+	u0d:=Coefficients(P1[1])[1]; u1d:=Coefficients(P1[1])[2];
+	v0d:=Coefficients(P1[2])[1]; v1d:=Coefficients(P1[2])[2];
+
+	a:=cs[1]; b:=cs[2]; c:=cs[3]; d:=cs[4];
+
+	u1:=(a*d*u1d+2*a*b+b*c*u1d+2*d*c*u0d)/(a^2+u1d*a*c+u0d*c^2);	u0:=(u1d*b*d+u0d*d^2+b^2)/(a^2+u1d*a*c+u0d*c^2);
+	v1:=(v1d*d^2*a^5+3*a^4*d^2*c*v0d-2*a^4*v1d*b*c*d-3*a^3*d^2*v1d*u0d*c^2+3*a^3*d^2*c^2*u1d*v0d-6*a^3*c^2*b*v0d*d+\
+	     a^3*c^2*v1d*b^2+a^2*d^2*c^3*u1d^2*v0d-a^2*d^2*u0d*c^3*v1d*u1d-a^2*d^2*c^3*u0d*v0d+6*a^2*d*u0d*c^3*v1d*b-6*\
+	     a^2*d*c^3*u1d*b*v0d+3*a^2*c^3*b^2*v0d+2*a*d*u0d*c^4*v1d*b*u1d-2*a*d*c^4*u1d^2*v0d*b+2*a*d*c^4*u0d*v0d*b-3*\
+	     a*u0d*c^4*v1d*b^2+3*a*c^4*u1d*b^2*v0d-u0d*c^5*v1d*b^2*u1d+c^5*u1d^2*v0d*b^2-c^5*u0d*v0d*b^2)/((a^4+2*c*a^3\
+	     *u1d+2*c^2*a^2*u0d+c^2*a^2*u1d^2+2*c^3*a*u1d*u0d+u0d^2*c^4)*e);
+	v0:=(a^4*v0d*d^3+a^4*v1d*d^2*b-2*a^3*d^3*u0d*c*v1d+2*a^3*v0d*d^3*c*u1d-2*a^3*b^2*v1d*c*d-3*a^2*v0d*c^2*d^2*b*u1\
+	     d-a^2*c^2*u1d*u0d*d^3*v1d-a^2*v0d*d^3*c^2*u0d-3*a^2*d*c^2*v0d*b^2+a^2*v0d*d^3*c^2*u1d^2+a^2*b^3*c^2*v1d+3*\
+	     a^2*v1d*d^2*b*u0d*c^2+2*a*b*d^2*u0d*c^3*v1d*u1d+2*a*v0d*c^3*d^2*b*u0d+2*a*c^3*v0d*b^3-2*a*v0d*c^3*d^2*b*u1\
+	     d^2+b^2*d*c^4*u1d^2*v0d-b^3*u0d*c^4*v1d+b^3*c^4*u1d*v0d-b^2*d*c^4*u0d*v0d-b^2*d*u0d*c^4*v1d*u1d)/((a^4+2*c\
+	     *a^3*u1d+2*c^2*a^2*u0d+c^2*a^2*u1d^2+2*c^3*a*u1d*u0d+u0d^2*c^4)*e);
+
+	P2:=J_alpha![x^2+u1*x+u0,v1*x+v0];
+
+	// J_ALPHA -> Etil_ALPHA X Etil_ALPHA (RHO_HAT)//	
+	x1:=Roots(poly!P2[1])[1][1]; y1:=Evaluate(poly!P2[2],x1);
+	P3:=BaseChange(C_alpha,Fp2)![x1,y1];
+	x2:=Roots(poly!P2[1])[2][1]; y2:=Evaluate(poly!P2[2],x2);
+	P4:=BaseChange(C_alpha,Fp2)![x2,y2];
+	
+	// C_ALPHA -> Ctil_ALPHA (PHI_INV) // 
+	P5:=Ctil_alpha![-(P3[1]-i)/(P3[1]+i),-i*P3[2]*w/(P3[1]+i)^3];  P6:=Ctil_alpha![-(P4[1]-i)/(P4[1]+i),-i*P4[2]*w/(P4[1]+i)^3];
+	// Ctil_ALPHA -> Etil_ALPHA (OMEGA) // 
+	P7:=Etil_alpha![P5[1]^2,P5[2]];  P8:=Etil_alpha![P6[1]^2,P6[2]];
+	// Oplus_Etil //
+	P9:=P7+P8; 	
+	// Etil_ALPHA -> E_ALPHA //
+	P10:=E_alpha![(beta/betahat)^2*(P9[1]-r1),(beta/betahat)^3*P9[2]];
+	
+	return P10;
+end function;
+ 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Mpt1,Rpt,Kpt,K,cs,J_ros,C_ros:=MonToKum();
+
+"Random point P1 on Montgomery Curve E_alpha:\n";
+"P1:=", Mpt1, "\n";
+
+"Corresponding point to P1 on Kummer surface K is P6:\n";
+"P6:=", Kpt, "\n";
+
+Mpt2:=KumToMon(Rpt,Kpt,K,cs,J_ros,C_ros);
+
+"The road is: P1->P6, P6->P10 and P10 = 2*P1.\n";
+"P10:=", Mpt2, "\n";
+"2*P1:=", 2*Mpt1, "\n";
+

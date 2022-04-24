@@ -1,0 +1,331 @@
+// Copyright (c) Microsoft. All rights reserved.
+// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+
+/* The original script is slightly changed to be able to it use in the implementation */
+clear;
+
+p:=2^372*3^239-1;
+Fp:=GF(p);
+Fp2<i>:=ExtensionField<Fp,x|x^2+1>;
+poly<x>:=PolynomialRing(Fp2);
+
+K := [
+     	[	Fp!964830035092766785517914396185546056142254919889948968973942228460405585822659195227299554584257536143693791429594490696809006406358702341831567323740191092400574842546494940318793361007693369076975862815525041503390891452191, 
+    		Fp!2630906077131410915970519216323700999089683531277538935432983054104316678474041672854283508929426450900452751315817869246772816788366265967442417525789077949872833791641366549734193474414911203977512647849846316855292823725648,     
+    		Fp!4336892320405793250672479572215079663969022964466542092818368806565920615210740902937641427943016247687197425495993842572719597162037069004317047942594240925966530462025337296690174265480187464215505970173011277074377314067877 ],    
+    	[	Fp!870195167958202428441014890573730157258786793463347603554494201705097799734001147155404380075243092811136549405136929287603317235080909961123141215869340030643499823223286012592120964872755589377128182630174314677558011702846,     
+    		Fp!1760710909173208487529504325749970841830896737814191331878488852399218878740040525698879128854183358089316201910680939959169499553285356006319276309919737919229333968418080537142072509542155614600384465219672002177734812022802, 
+    		Fp!1, Fp!1 ],    
+    	[	Fp!1760710909173208487529504325749970841830896737814191331878488852399218878740040525698879128854183358089316201910680939959169499553285356006319276309919737919229333968418080537142072509542155614600384465219672002177734812022802,     
+    		Fp!870195167958202428441014890573730157258786793463347603554494201705097799734001147155404380075243092811136549405136929287603317235080909961123141215869340030643499823223286012592120964872755589377128182630174314677558011702846,     
+    		Fp!1247042482530207573563811851992817760996459583677364093360236328180419129628578472488496827115978165501602730798825871451905070805202370975274381888193938815296929738799733384706006997853078505270552587401384860290186727392596,     
+    		Fp!1247042482530207573563811851992817760996459583677364093360236328180419129628578472488496827115978165501602730798825871451905070805202370975274381888193938815296929738799733384706006997853078505270552587401384860290186727392596 ],    
+    	[	Fp!3288950114064010507190107044168421405383402703953759524021978250436040436710969548841222751755713290830357562527925073414484971340682021222023746786410180942165630335912364873150636486286825501325750460071258117953894081103356,     
+    		Fp!3693822484692598220789859091962915984659703855336924926987020527613423871858610416342172388433994386856399101243244918352303973274965271216877364117248070173399330285159417780990976341618879950725797416363851750228140137139870,     
+    		Fp!6535292675518427995172002904555662911264611487984267655551505726991842578427237157957240457745637778554784176327317857829149972458881979629927823014776662242322544420063144194651870857567902352865502544095726499122605071156559,     
+    		Fp!6535292675518427995172002904555662911264611487984267655551505726991842578427237157957240457745637778554784176327317857829149972458881979629927823014776662242322544420063144194651870857567902352865502544095726499122605071156559 ]
+	 ];
+
+P := [ 	Fp!5738004633791624399951134807287794482883762420727695567167189843554335109166277619811568740510613809456376586327992727148590023757897656560298432214110958487784975753250251888505161918808192811263153897769712642459889376431098, 
+		Fp!6321011042285346099457448120630970117152810997390500453410595659256538052117655031084502691722877258012717611239286011510313374347584969721442470136959940385666706417063293438149232632522148265275544911996632891676372508995267, 
+		Fp!2043243509957269292468667272314250502648579177261754208190844542173250300278955482833827139292451487268781742710550643080040396151525085589531886902933503043530535440985227986306286287004945120239653470650470605160921127338458, 
+		Fp!1 ];
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+H:=function(P);
+
+	/*
+
+	The 4-way Hadamard transform
+
+	INPUTS: - A tuple of four projective field elements [x,y,z,t]
+	OUTPUTS: - The Hadamard transform [x+y+z+t,x+y-z-t,x-y+z-t,x-y-z+t]		
+
+	*/
+
+	T1:=P[1]+P[2]; T2:=P[3]+P[4]; T3:=P[1]-P[2]; T4:=P[3]-P[4];
+
+	return [T1+T2,T1-T2,T3+T4,T3-T4];
+
+end function;
+
+S:=function(P);
+
+	/*
+
+	The 4-way squaring
+
+	INPUTS: - A tuple of four projective field elements [x,y,z,t]
+	OUTPUTS: - The coordinate-wise squarings [x^2,y^2,z^2,t^2]		
+
+	*/
+
+	return [P[1]^2,P[2]^2,P[3]^2,P[4]^2];
+
+end function;
+
+C:=function(V,W)
+
+	/*
+
+	The 4-way coordinate-wise multiplication of 2 tuples
+
+	INPUTS: - Two tuples of four projective field elements
+	OUTPUTS: - One 4-tuple of their coordinate-wise products	
+
+	*/
+
+	return [V[1]*W[1],V[2]*W[2],V[3]*W[3],V[4]*W[4]];
+
+end function;
+
+Invert4Constants:=function(P)
+
+	/*
+
+	The 4-way inversion in projective 3-space
+
+	INPUTS: - One tuple of 4-elements in P^3 
+	OUTPUTS: - A tuple of elements projectively equivalent to their inverses
+
+	*/
+
+	pi1:=P[3]*P[4];
+	pi2:=pi1*P[1];
+	pi1:=pi1*P[2];
+	pi3:=P[1]*P[2];
+	pi4:=pi3*P[3];
+	pi3:=pi3*P[4];
+
+	return [pi1,pi2,pi3,pi4];
+
+end function;
+
+KummerConstantsFromSquaredThetas:=function(P)
+	
+	/*
+
+	Computes the Kummer surface constants used in the DBL and DBLADD functions
+
+	INPUTS: - the 4 squared theta constants [mu1,mu2,mu3,mu4]
+	OUTPUTS: - the first tuple is projectively equivalent to [1/mu1: 1/mu2: 1/mu3: 1/mu4]
+			 - the second tuple is projectively equivalent to [1/mu1h: 1/mu2h: 1/mu3h: 1/mu4h], 
+			 where the mujh are the j-th component of the Hadamard transform of [mu1,mu2,mu3,mu4]
+
+	*/
+	
+	return Invert4Constants(P),Invert4Constants(H(P));
+
+end function;
+
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+
+SquaredKummerFromSquaredThetas:=function(thetas)
+	
+	/*
+
+	Computes all of the Kummer surface constants
+
+	INPUTS: - the 4 squared theta constants [mu1,mu2,mu3,mu4]
+	OUTPUTS: - K1: [K_F,K_G,K_H], which define a Kummer surface (see Section 5)
+			 - K2: [mu1,mu2,mu3,mu4], the unchanged input, but part of the full description of a Kummer
+			 - K3, K4: the two 4-tuples of projective constants needed in the DBL and DBLADD routines
+	*/
+	
+	mu1:=thetas[1]; mu2:=thetas[2]; mu3:=thetas[3]; mu4:=thetas[4];
+
+	K_F:=(mu1+mu2+mu3+mu4)*(mu1+mu2-mu3-mu4)*(mu1-mu2+mu3-mu4)*(mu1-mu2-mu3+mu4);
+	K_F:=K_F/(mu1*mu4-mu2*mu3)/(mu1*mu3-mu2*mu4)/(mu1*mu2-mu3*mu4);
+	K_G:=(mu1^2-mu2^2-mu3^2+mu4^2)/(mu1*mu4-mu2*mu3);
+	assert K_G eq (mu1^2-mu2^2+mu3^2-mu4^2)/(mu1*mu3-mu2*mu4);
+	K_H:=(mu1^2+mu2^2-mu3^2-mu4^2)/(mu1*mu2-mu3*mu4);
+	K_F:=4*K_F^2*mu1*mu2*mu3*mu4;
+
+	K1:=[K_F,K_G,K_H];
+	K2:=thetas;
+	K3,K4:=KummerConstantsFromSquaredThetas(thetas);
+
+	return [K1,K2,K3,K4];
+
+end function;
+
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+
+OnKummer:=function(P,K)
+
+	/*
+
+	Checks if a given point is on a given Kummer surface.
+
+	INPUTS: - P: Point in P^3, represented as a 4-tuple
+ 			- K: Kummer surface
+	OUTPUT: - boolean: true if P lies on K, false otherwise
+
+	*/
+
+	return 
+		K[1][1]*(P[1]*P[2]*P[3]*P[4])
+		eq
+		(
+		(P[1]^2+P[2]^2+P[3]^2+P[4]^2)
+		-K[1][2]*(P[1]+P[2])*(P[3]+P[4])
+		-K[1][3]*(P[1]*P[2]+P[3]*P[4])
+		)^2;
+
+end function;
+
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+
+DBL:=function(P,K);
+
+	/*
+
+	(Pseudo-)doubling of a Kummer point
+
+	INPUTS: - P: Point in P^3, represented as a 4-tuple, lying on...
+ 			- K: Kummer surface
+	OUTPUT: - [2]P 
+
+	*/
+
+	P:=H(P);
+	P:=S(P);
+	P:=C(P,K[4]);
+	P:=H(P);
+	P:=S(P);
+	P:=C(P,K[3]);
+
+	if OnKummer(P,K) then
+		return P;
+	else
+		return "somethings wrong";
+	end if;
+	
+end function;
+
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+
+eDBLs:=function(P,K,e);
+
+	/*
+
+	Repeated (Pseudo-)doublings of a Kummer point
+
+	INPUTS: - P: Point in P^3, represented as a 4-tuple, lying on...
+ 			- K: Kummer surface
+ 			- e: an integer
+	OUTPUT: - [2^e]P 
+	
+	*/
+
+	for j:=1 to e do
+		P:=DBL(P,K);
+	end for;
+
+	if OnKummer(P,K) then
+		return P;
+	else
+		return "somethings wrong";
+	end if;
+	
+end function;
+
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+
+IsogenousSquaredThetasFromTorsionKernel:=function(P2,P4)
+	/*
+
+	Given a special point of order 2 and a point of order 4 lying above it, this function computes the squared theta constants of the image Kummer surface corresponding to the kernel specified by the torsion points (see the paper), as well as constants used to compute the image of any point under the associated isogeny.
+
+	INPUTS: - P2: a Kummer point of order 2 in one of the two (2,2)-subgroups of interest
+			- P4: a Kummer point of order 4 such that P2=[2]P4 on K
+	OUTPUT: - mus: a 4-tuple of the squared theta coordinates of the image Kummer
+			- pis: some constants used in the isogeny evaluation (next) function, i.e., in the special scaling C. See the paper.
+	*/
+
+	HP2:=H(P2); HP4:=H(P4); //save on H(P2)
+
+	assert P2[3] ne 0;
+
+	pi1:=HP2[2]*HP4[3];
+	pi2:=HP4[3]*HP2[1];
+	pi3:=HP2[2]*HP4[1]; 
+	pi4:=pi3;
+
+	pis:=[pi1,pi2,pi3,pi4];
+	mus:=C(HP2,pis);
+	mus:=H(mus);
+	mus:=S(mus);
+
+	return mus,pis;
+end function;
+
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+
+IsogenyKummerPoint:=function(Q,pis)
+
+	/*
+
+	Evaluating the (2,2) isogeny from the above function on a general point on the domain Kummer. 
+
+	INPUTS: - Q: any non-kernel point on a given Kummer K
+	OUTPUT: - varphi(Q): the image of varphi on Qs
+
+	*/
+
+	Q:=H(Q);
+	Q:=C(Q,pis);
+	Q:=H(Q);
+	Q:=S(Q);
+
+	return Q;
+
+end function;
+
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+
+/*
+In what follows we perform a simple scalar-multiplication-based loop to compute a chain of Richelot isogenies on Kummers. We move the input point P through subsequent isogenies and illustrate its order being decreased by a factor of 2 each time. We also push a random point Q through the isogenies. 
+
+This is merely to illustrate that the Kummer approach is compatible with state-of-the-art SIDH implementations. Of course, a real implementation would avoid various checks/normalizations, would work out an optimal binary-tree strategy for the main loop, etc.
+
+See the paper for more details. 
+*/
+
+for l:=371 to 3 by -1 do
+	P4:=eDBLs(P,K,l-2);
+	P2:=DBL(P4,K);
+	mus,pis:=IsogenousSquaredThetasFromTorsionKernel(P2,P4);
+	P:=IsogenyKummerPoint(P,pis);
+	K:=SquaredKummerFromSquaredThetas(mus);
+	assert OnKummer(P,K);
+end for;
+P;
+
+
+Fp:=GF(2^372*3^239-1);B:=2^24;
+P1 := (14624463 + B*10979021 + B^2*11016573 + B^3*12720240 + B^4*1940312 + B^5*5605342 + B^6*3462558 + B^7*7007616 + B^8*3790144 + B^9*6708737 + B^10*1499998 + B^11*11222487 + B^12*2465563 + B^13*6601325 + B^14*14662990 + B^15*15502504 + B^16*15931165 + B^17*4104463 + B^18*15918376 + B^19*11424682 + B^20*6818815 + B^21*13502147 + B^22*15111228 + B^23*7087916 + B^24*11678281 + B^25*14255284 + B^26*6884115 + B^27*13319047 + B^28*8798024 + B^29*5181056 + B^30*11028413 + B^31*58);
+P2 := (10643106 + B*13226923 + B^2*9980097 + B^3*16122369 + B^4*9206166 + B^5*73556 + B^6*14376783 + B^7*9783169 + B^8*1501003 + B^9*1818837 + B^10*11293467 + B^11*7718690 + B^12*7881205 + B^13*10838783 + B^14*11402494 + B^15*2784862 + B^16*289515 + B^17*7884710 + B^18*2199853 + B^19*65413 + B^20*6325056 + B^21*11370257 + B^22*5727554 + B^23*1340382 + B^24*429786 + B^25*14853434 + B^26*4214073 + B^27*9839002 + B^28*11927662 + B^29*3275837 + B^30*12298425 + B^31*77);
+P3 := (6310700 + B*827224 + B^2*7135550 + B^3*194518 + B^4*7311658 + B^5*13992435 + B^6*6023052 + B^7*5713140 + B^8*6884472 + B^9*16529753 + B^10*16519359 + B^11*5189242 + B^12*484160 + B^13*542791 + B^14*5831616 + B^15*14521525 + B^16*4669888 + B^17*8268585 + B^18*7584792 + B^19*194695 + B^20*9062974 + B^21*6998424 + B^22*2777195 + B^23*2195844 + B^24*6356125 + B^25*14184339 + B^26*16749299 + B^27*1422604 + B^28*1077318 + B^29*2598526 + B^30*7242731 + B^31*91);
+P4 := (10005955 + B*11880265 + B^2*2339688 + B^3*5755172 + B^4*10354423 + B^5*16405955 + B^6*3467346 + B^7*8793903 + B^8*2296482 + B^9*15956100 + B^10*1904960 + B^11*10161412 + B^12*15422850 + B^13*1378128 + B^14*15572709 + B^15*11162521 + B^16*6164840 + B^17*13044388 + B^18*13088947 + B^19*628094 + B^20*10517325 + B^21*5430234 + B^22*3778986 + B^23*11035016 + B^24*7789291 + B^25*13374095 + B^26*8912340 + B^27*3560350 + B^28*8398210 + B^29*11063152 + B^30*11734888 + B^31*58);
+P1 eq P[1];
+P2 eq P[2];
+P3 eq P[3];
+P4 eq P[4];
+exit;
