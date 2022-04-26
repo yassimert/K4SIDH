@@ -21,11 +21,11 @@ int main() {
 #ifdef VALIDATION
 	FILE *f, *s, *t;
 	char ch;
-	s = fopen("../K4SIDH/Kummer.mag", "r");						// read Magma script version of the isogeny loop
-	t = fopen("../K4SIDH/Test.mag", "w");						// make changes in new file
+	s = fopen("Kummer.mag", "r");						// read Magma script version of the isogeny loop
+	t = fopen("Test.mag", "w");						// make changes in new file
 	while((ch = fgetc(s)) != EOF) fputc(ch, t);					// copy script to new file
 	fclose(s); fclose(t);
-	f = fopen("../K4SIDH/Test.mag", "a");						// open new file to append results
+	f = fopen("Test.mag", "a");						// open new file to append results
 	printf("\n\nRunning K4SIDH Validation Test.......\n\n\n");
 	kummer_ISOG(RES);											// run Kummer isogeny evaluations sequence
 	fprint_kpt4x751(f,RES);										// print results to opened file
@@ -35,7 +35,7 @@ int main() {
 	fprintf(f, "P4 eq P[4];\n");								// check if 4th channel of the result is true
 	fprintf(f, "exit;\n");										// append exit statement for closing Magma after checking is done
 	fclose(f);
-	int ret = system("python3 \"encoder.py\" \"Test.mag\"");	// run new Magma script and make the comparison
+	int ret = system("python3 encoder.py Test.mag");	// run new Magma script and make the comparison
 	if(ret != 0) return -1;
 #endif
 #ifdef SPEED
